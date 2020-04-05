@@ -1,9 +1,8 @@
 (ns freactive.plugins.garden
   (:require
-   [garden.types]
-   [garden.compiler]
-   [freactive.dom :as dom]))
-
+    [freactive.dom :as dom]
+    [garden.compiler]
+    [garden.types]))
 
 (extend-protocol dom/IDOMAttrValue
   garden.types.CSSUnit

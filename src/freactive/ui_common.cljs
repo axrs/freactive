@@ -1,35 +1,20 @@
 (ns freactive.ui-common
   (:require
-   [freactive.core :as r]))
+    [freactive.core :as r]))
 
 (defprotocol IVirtualElement
   "Warning: this is currently an internal API subject to change or sudden removal.
 
 A simple element is any element which directly wraps exactly one native element."
-  (-velem-insert [this vparent vnext-sibling]
-    "Inserts this virtual element into a native element tree. vnext-sibling
-is the next sibling virtual element if any.")
-  (-velem-replace [this cur-velem]
-    "Replaces cur-velem (making sure to dispose it) with this virtual element.")
-  (-velem-take [this]
-    "Removes the virtual element from the element tree without disposing it.")
-(-velem-parent [this]
-    "Returns the virtual parent element")
-  (-velem-head [this]
-    "Returns a simple virtual element (or nil) representing the head of an
-element sequence. Same as -velem-simple-element for simple elements.")
-  (-velem-next-sibling-of [this child]
-    "Returns the next virtual sibling element to this element or nil when this
-is the last child.")
-  (-velem-native-element [this]
-    "Returns the native element wrapped by this simple element or nil for
-sequence elements.")
-  (-velem-simple-element [this]
-    "Returns the simplest virtual element (one directly wrapping a native
-element) wrapped by this virtual element (or itself), or nil for sequence
-elements.")
-  (-velem-lifecycle-callback [this cb-name]
-    "Gets a lifecycle callback fn (if any) for the keyword cb-name."))
+  (-velem-insert [this vparent vnext-sibling] "Inserts this virtual element into a native element tree. vnext-sibling is the next sibling virtual element if any.")
+  (-velem-replace [this cur-velem] "Replaces cur-velem (making sure to dispose it) with this virtual element.")
+  (-velem-take [this] "Removes the virtual element from the element tree without disposing it.")
+  (-velem-parent [this] "Returns the virtual parent element")
+  (-velem-head [this] "Returns a simple virtual element (or nil) representing the head of an element sequence. Same as -velem-simple-element for simple elements.")
+  (-velem-next-sibling-of [this child] "Returns the next virtual sibling element to this element or nil when this is the last child.")
+  (-velem-native-element [this] "Returns the native element wrapped by this simple element or nil for sequence elements.")
+  (-velem-simple-element [this] "Returns the simplest virtual element (one directly wrapping a native element) wrapped by this virtual element (or itself), or nil for sequence elements.")
+  (-velem-lifecycle-callback [this cb-name] "Gets a lifecycle callback fn (if any) for the keyword cb-name."))
 
 (defn velem-native-element [this]
   (-velem-native-element this))
@@ -52,14 +37,13 @@ elements.")
       (velem-native-element head)
       (let [parent (velem-parent vnext)]
         (loop [vnext vnext]
-          (let [vnnext (velem-next-sibling-of parent vnext)]
-            (if vnnext
-              (if-let [head (velem-head vnnext)]
-                (velem-native-element head)
-                (recur (velem-next-sibling-of parent vnnext)))
-              (when-not (velem-simple-element parent)
-                (let [pparent (velem-parent parent)]
-                  (next-native-sibling (velem-next-sibling-of pparent parent)))))))))))
+          (if-let [vnnext (velem-next-sibling-of parent vnext)]
+            (if-let [head (velem-head vnnext)]
+              (velem-native-element head)
+              (recur (velem-next-sibling-of parent vnnext)))
+            (when-not (velem-simple-element parent)
+              (let [pparent (velem-parent parent)]
+                (next-native-sibling (velem-next-sibling-of pparent parent))))))))))
 
 (defn native-parent [parent]
   (when parent
@@ -82,7 +66,7 @@ elements.")
 (defn velem-lifecycle-callback [this cb-name]
   (-velem-lifecycle-callback this cb-name))
 
-(deftype ReactiveElement [id the-ref binding-info velem-fn enqueue-fn 
+(deftype ReactiveElement [id the-ref binding-info velem-fn enqueue-fn
                           ^:mutable parent ^:mutable vnext
                           ^:mutable cur-velem ^:mutable dirty
                           ^:mutable updating ^:mutable disposed]
@@ -92,8 +76,10 @@ elements.")
       (binding-initialized the-ref)))
   (dispose [this]
     ((.-remove-watch binding-info) the-ref id)
-    (when cur-velem (r/dispose cur-velem))
-    (when-let [clean (.-clean binding-info)] (clean the-ref))
+    (when cur-velem
+      (r/dispose cur-velem))
+    (when-let [clean (.-clean binding-info)]
+      (clean the-ref))
     (set! (.-disposed this) true)
     (when-let [binding-disposed (get (meta the-ref) :binding/on-disposed)]
       (binding-disposed the-ref)))
@@ -103,7 +89,7 @@ elements.")
     (velem-fn (or ((.-raw-deref binding-info) the-ref) "")))
   (done-updating [this]
     (set! updating false)
-    (when dirty 
+    (when dirty
       (enqueue-fn #(.animate this))))
   (show-new-elem [this new-velem]
     (set! cur-velem
@@ -116,14 +102,12 @@ elements.")
       (let [new-velem (.get-new-elem this)]
         (when-not (= new-velem cur-velem)
           (if-let [on-detaching (velem-lifecycle-callback cur-velem :node/on-detaching)]
-            (on-detaching
-             cur-velem
-             (fn []
-               (if disposed
-                 (set! updating false)
-                 (.show-new-elem this (if dirty
-                                        (.get-new-elem this)
-                                        new-velem)))))
+            (on-detaching cur-velem (fn []
+                                      (if disposed
+                                        (set! updating false)
+                                        (.show-new-elem this (if dirty
+                                                               (.get-new-elem this)
+                                                               new-velem)))))
             (.show-new-elem this new-velem))))))
   (invalidate [this]
     ((.-remove-watch binding-info) the-ref id)
@@ -135,10 +119,9 @@ elements.")
 
   IEquiv
   (-equiv [this other]
-    (and
-     (instance? ReactiveElement other)
-     (= the-ref (.-the-ref other))))
-  
+    (and (instance? ReactiveElement other)
+         (= the-ref (.-the-ref other))))
+
   IVirtualElement
   (-velem-parent [this] parent)
   (-velem-head [this] (velem-head cur-velem))
@@ -164,12 +147,12 @@ elements.")
 
 (defn reactive-element [the-ref velem-fn enqueue-fn]
   (ReactiveElement.
-   (r/new-reactive-id)
-   the-ref
-   (r/get-binding-fns the-ref)
-   velem-fn
-   enqueue-fn
-   nil nil nil false false false))
+    (r/new-reactive-id)
+    the-ref
+    (r/get-binding-fns the-ref)
+    velem-fn
+    enqueue-fn
+    nil nil nil false false false))
 
 ;; (defprotocol IVirtualElementContainer
 ;;   (-velem-container-insert [this child before])
@@ -208,6 +191,7 @@ elements.")
     (r/dispose projection)
     (doseq [elem elements]
       (r/dispose elem)))
+
   (clear [this]
     (doseq [elem elements]
       (velem-remove elem)))
@@ -215,13 +199,17 @@ elements.")
   r/IProjectionTarget
   (-target-peek [this idx]
     (aget elements idx))
+
   (-target-take [this idx]
     (let [elem (aget (.splice elements idx 1) 0)]
       (velem-take elem)
       elem))
+
   (-target-count [this] (.-length elements))
+
   (-target-move [this idx before-idx]
     (r/-target-insert this (aget (.splice elements idx 1) 0) before-idx))
+
   (-target-insert [this elem before-idx]
     (let [elem (velem-fn elem)
           len (.-length elements)
@@ -231,14 +219,13 @@ elements.")
             (velem-next-sibling-of parent this))]
       (.splice elements (or before-idx (alength elements)) 0 elem)
       (velem-insert elem parent before-elem)))
-  
 
   IVirtualElement
   (-velem-parent [this] parent)
   (-velem-native-element [this])
   (-velem-simple-element [this])
   (-velem-head [this]
-    (when (> (.-length elements) 0)
+    (when (pos? (.-length elements))
       (velem-head (aget elements 0))))
   (-velem-next-sibling-of [this child]
     (array-next-sibling-of elements child))
@@ -248,7 +235,7 @@ elements.")
     this)
   (-velem-take [this]
     (doseq [elem elements]
-      (velem-take elem))) 
+      (velem-take elem)))
   (-velem-replace [this cur-velem]
     (let [vparent (velem-parent cur-velem)
           next-sib (velem-next-sibling-of vparent cur-velem)]

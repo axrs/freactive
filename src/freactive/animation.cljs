@@ -4,8 +4,7 @@
     [freactive.dom :as dom]
     [goog.object]))
 
-(deftype AnimationEaser [id state easing-fn animating on-complete
-                         watches fwatches]
+(deftype AnimationEaser [id state easing-fn animating on-complete watches fwatches]
   Object
   (rawDeref [this] state)
   (reactiveDeref [this]
@@ -22,9 +21,9 @@
       (js-delete (.-fwatches this) key)))
   (notifyFWatches [this oldVal newVal]
     (goog.object/forEach
-     (.-fwatches this)
-     (fn [f key _]
-       (f key this oldVal newVal)))
+      (.-fwatches this)
+      (fn [f key _]
+        (f key this oldVal newVal)))
     (doseq [[key f] (.-watches this)]
       (f key this oldVal newVal)))
 
@@ -60,7 +59,7 @@
          scaled-easing-fn
          (fn [new-ms]
            (let [t (/ (- new-ms start-ms) duration)
-                 t (if (>= t 1.0)
+                 t (if (<= 1.0 t)
                      (do
                        (set! (.-animating easer) false)
                        ;;(println "ending animation loop")
@@ -75,17 +74,17 @@
        ;;(println "starting animation loop")
        (set! (.-animating easer) true)
        (.addFWatch dom/frame-time (.-id easer)
-                  (fn [_ _ _ new-ms]
-                    (if (.-animating easer)
-                      (let [cur-state (.-state easer)
-                            new-state ((.-easing-fn easer) new-ms)]
-                        (set! (.-state easer) new-state)
-                        (.notifyFWatches easer cur-state new-state))
-                      (do
-                        (.removeFWatch dom/frame-time (.-id easer))
-                        (when-let [cb (.-on-complete easer)]
-                          (set! (.-on-complete easer) nil)
-                          (cb)))))))
+                   (fn [_ _ _ new-ms]
+                     (if (.-animating easer)
+                       (let [cur-state (.-state easer)
+                             new-state ((.-easing-fn easer) new-ms)]
+                         (set! (.-state easer) new-state)
+                         (.notifyFWatches easer cur-state new-state))
+                       (do
+                         (.removeFWatch dom/frame-time (.-id easer))
+                         (when-let [cb (.-on-complete easer)]
+                           (set! (.-on-complete easer) nil)
+                           (cb)))))))
      easer)))
 
 (defn easing-chain [easings]

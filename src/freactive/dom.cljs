@@ -328,8 +328,8 @@ map in velem."
 ;; attributes to set directly
 (doseq [a #js ["id" "value"]]
   (aset attr-setters a
-        (fn [e v]
-          (aset e a v))))
+    (fn [e v]
+      (aset e a v))))
 
 (defn- get-attr-setter [element attr-name]
   (if-let [setter (aget attr-setters attr-name)]
@@ -341,7 +341,7 @@ map in velem."
   (fn [attr-value]
     (if attr-value
       (.setAttributeNS element attr-ns attr-name
-                       (normalize-attr-value attr-value))
+        (normalize-attr-value attr-value))
       (.removeAttributeNS element attr-ns attr-name))
     attr-value))
 
@@ -388,9 +388,9 @@ map in velem."
   (ensureNode [this]
     (when-not node
       (set! node
-            (if ns-uri
-              (.createElementNS js/document ns-uri tag)
-              (.createElement js/document tag)))
+        (if ns-uri
+          (.createElementNS js/document ns-uri tag)
+          (.createElement js/document tag)))
       (set! (.-freactive-state node) this)
       (set! attr-binder (bind-attrs! node attrs))
       (doseq [child children]
@@ -477,7 +477,7 @@ map in velem."
 Can be used to define custom conversions to DOM nodes or text for things such as numbers
 or dates; or can be used to define containers for DOM elements themselves."
   (-get-dom-image [x]
-                  "Should return either virtual DOM (a vector or string) or an actual DOM node."))
+    "Should return either virtual DOM (a vector or string) or an actual DOM node."))
 
 (extend-protocol IDOMImage
   object
@@ -523,14 +523,14 @@ or dates; or can be used to define containers for DOM elements themselves."
           attrs (if have-attrs attrs? {})
           attrs (cond-> attrs
 
-                        (and id (not (:id attrs)))
-                        (assoc :id id)
+                  (and id (not (:id attrs)))
+                  (assoc :id id)
 
-                        class
-                        (update :class
-                          (fn [cls]
-                            (let [class (.replace class re-dot " ")]
-                              (if cls (str class " " cls) class)))))
+                  class
+                  (update :class
+                    (fn [cls]
+                      (let [class (.replace class re-dot " ")]
+                        (if cls (str class " " cls) class)))))
 
           children (if have-attrs (rest tail) tail)
           children* (append-children-fn #js [] children)]
@@ -714,10 +714,10 @@ the existing attribute map."
   (doseq [child (.-children vroot)]
     (ui/velem-remove child))
   (set! (.-children vroot) nil))
-  ;; (let [root (.-root vroot)]
-  ;;   (when-not (keyword-identical? :unmounted root)
-  ;;     (ui/velem-remove root)
-  ;;     (set! (.-root vroot) :unmounted)))
+;; (let [root (.-root vroot)]
+;;   (when-not (keyword-identical? :unmounted root)
+;;     (ui/velem-remove root)
+;;     (set! (.-root vroot) :unmounted)))
 
 
 (defn mount! [mount-point vdom]

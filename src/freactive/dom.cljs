@@ -129,7 +129,7 @@ map in velem."
       (ui/native-parent parent))))
 
 (defn- dom-insert [parent dom-node vnext-sibling]
-  (let [dom-parent (native-parent parent)]
+  (let [dom-parent (ui/native-parent parent)]
     ;; (when vnext-sibling (println "vnext" (type vnext-sibling)))
     (if-let [dom-before (ui/next-native-sibling vnext-sibling)]
       (do
@@ -154,7 +154,7 @@ map in velem."
   (let [parent (ui/velem-parent old-velem)
         next-sib (ui/velem-next-sibling-of parent old-velem)]
     (ui/velem-remove old-velem)
-    (dom-insert (native-parent parent) new-node next-sib)))
+    (dom-insert parent new-node next-sib)))
 
 (deftype UnmanagedDOMNode [node on-dispose ^:mutable parent]
   Object

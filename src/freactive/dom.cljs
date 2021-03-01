@@ -122,8 +122,14 @@ map in velem."
 
 ;; Core DOM stuff
 
+(defn native-parent [parent]
+  (when parent
+    (if (du/native-node? parent)
+      parent
+      (ui/native-parent parent))))
+
 (defn- dom-insert [parent dom-node vnext-sibling]
-  (let [dom-parent (ui/native-parent parent)]
+  (let [dom-parent (native-parent parent)]
     ;; (when vnext-sibling (println "vnext" (type vnext-sibling)))
     (if-let [dom-before (ui/next-native-sibling vnext-sibling)]
       (do
@@ -148,7 +154,7 @@ map in velem."
   (let [parent (ui/velem-parent old-velem)
         next-sib (ui/velem-next-sibling-of parent old-velem)]
     (ui/velem-remove old-velem)
-    (dom-insert (ui/native-parent parent) new-node next-sib)))
+    (dom-insert (native-parent parent) new-node next-sib)))
 
 (deftype UnmanagedDOMNode [node on-dispose ^:mutable parent]
   Object
@@ -532,12 +538,8 @@ or dates; or can be used to define containers for DOM elements themselves."
           have-attrs (map? attrs?)
           attrs (if have-attrs attrs? {})
           attrs (cond-> attrs
-
-                  (and id (not (:id attrs)))
-                  (assoc :id id)
-
+                  (and id (not (:id attrs))) (assoc :id id)
                   class (assoc ::original-class-name (str/replace class re-dot " ")))
-
           children (if have-attrs (rest tail) tail)
           children* (append-children-fn #js [] children)]
       (elem-factory ns-uri tag-name attrs children*))))

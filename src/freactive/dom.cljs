@@ -1,6 +1,8 @@
 (ns freactive.dom
   (:require
+    [clojure.string :as str]
     [freactive.core :as r]
+    [freactive.dom.util :as du]
     [freactive.ui-common :as ui]
     [goog.object]))
 
@@ -120,9 +122,6 @@ map in velem."
 
 ;; Core DOM stuff
 
-(defn- get-element-state [x]
-  (.-freactive-state x))
-
 (defn- dom-insert [parent dom-node vnext-sibling]
   (let [dom-parent (ui/native-parent parent)]
     ;; (when vnext-sibling (println "vnext" (type vnext-sibling)))
@@ -187,24 +186,23 @@ map in velem."
 
 (defn- dispose-states [states])
 
-
-(defn- attr-diff* [node oas attr-map bind-attr]
+(defn- attr-diff* [node states new-attrs bind-attr]
   (let [nas #js {}]
-    (doseq [[k v] attr-map]
+    (doseq [[k v] new-attrs]
       (let [kstr (->str k)]
-        (if-let [existing (when oas (aget oas kstr))]
+        (if-let [existing (when states (aget states kstr))]
           (do
-            (js-delete oas kstr)
+            (js-delete states kstr)
             (when-let [new-state (existing v)]
               (aset nas kstr new-state)))
           (aset nas kstr (bind-attr node k v)))))
-    (dispose-states oas)
+    (dispose-states states)
     nas))
 
 (deftype AttrMapBinder [bind-fn clean-fn element ^:mutable states]
   IFn
-  (-invoke [this new-value]
-    (set! states (attr-diff* element states new-value bind-fn))
+  (-invoke [this new-attrs]
+    (set! states (attr-diff* element states new-attrs bind-fn))
     this)
   Object
   (clean [this]
@@ -309,7 +307,7 @@ map in velem."
 (defn- set-data-state!
   ([element state]
    (let [cur-state (get-data-state element)
-         node-state (get-element-state element)
+         node-state (du/element-state element)
          state (when state (name state))]
      (when-not (identical? cur-state state)
        (do-set-data-state! element state)
@@ -370,6 +368,14 @@ map in velem."
           (identical? 0 (.indexOf attr-name "on-"))
           (bind-event! element (.substring attr-name 3) attr-value)
 
+          (= "class" attr-name)
+          (do-bind-attr (fn set-class! [val]
+                          (let [original-class-name (du/original-class-name element)
+                                new-val (str/join \space (remove str/blank? [original-class-name val]))]
+                            (du/set-class-name! element new-val)
+                            new-val))
+           attr-value)
+
           :default
           (do-bind-attr (get-attr-setter element attr-name) attr-value))))))
 
@@ -391,7 +397,11 @@ map in velem."
         (if ns-uri
           (.createElementNS js/document ns-uri tag)
           (.createElement js/document tag)))
-      (set! (.-freactive-state node) this)
+      (du/set-element-state! node this)
+      (when-let [class-name (::original-class-name attrs)]
+        (du/set-class-name! node class-name)
+        (du/set-original-class-name! node class-name)
+        (set! attrs (dissoc attrs ::original-class-name)))
       (set! attr-binder (bind-attrs! node attrs))
       (doseq [child children]
         (ui/velem-insert child this nil))))
@@ -526,11 +536,7 @@ or dates; or can be used to define containers for DOM elements themselves."
                   (and id (not (:id attrs)))
                   (assoc :id id)
 
-                  class
-                  (update :class
-                    (fn [cls]
-                      (let [class (.replace class re-dot " ")]
-                        (if cls (str class " " cls) class)))))
+                  class (assoc ::original-class-name (str/replace class re-dot " ")))
 
           children (if have-attrs (rest tail) tail)
           children* (append-children-fn #js [] children)]
@@ -540,7 +546,7 @@ or dates; or can be used to define containers for DOM elements themselves."
   (and x (> (.-nodeType x) 0)))
 
 (defn managed? [elem]
-  (if (get-element-state elem) true false))
+  (some? (du/element-state elem)))
 
 (defn- ensure-unmanaged [elem]
   (assert (dom-node? elem))
@@ -550,7 +556,7 @@ or dates; or can be used to define containers for DOM elements themselves."
 (defn wrap-unmanaged-node [dom-node on-dispose]
   (ensure-unmanaged dom-node)
   (let [state (UnmanagedDOMNode. dom-node on-dispose nil)]
-    (set! (.-freactive-state dom-node) state)
+    (du/set-element-state! dom-node state)
     state))
 
 (declare dom-element)
@@ -562,7 +568,7 @@ or dates; or can be used to define containers for DOM elements themselves."
       (DOMTextNode. elem-spec nil nil)
 
       (dom-node? elem-spec)
-      (if-let [state (get-element-state elem-spec)]
+      (if-let [state (du/element-state elem-spec)]
         state
         (UnmanagedDOMNode. elem-spec nil nil))
 
@@ -613,7 +619,7 @@ or dates; or can be used to define containers for DOM elements themselves."
     (DOMTextNode. elem-spec nil nil)
 
     (dom-node? elem-spec)
-    (if-let [state (get-element-state elem-spec)]
+    (if-let [state (du/element-state elem-spec)]
       state
       (UnmanagedDOMNode. elem-spec nil nil))
 
@@ -668,13 +674,13 @@ or dates; or can be used to define containers for DOM elements themselves."
 ;; Public API
 
 (defn- get-velem-state [elem]
-  (or (get-element-state elem) elem))
+  (or (du/element-state elem) elem))
 
 (defn- find-by-id [id]
   (.getElementById js/document id))
 
 (defn- get-managed-dom-element [elem]
-  (let [velem (ui/velem-simple-element (get-element-state elem))]
+  (let [velem (ui/velem-simple-element (du/element-state elem))]
     (assert (instance? DOMElement velem) "Not a managed DOM element.")
     velem))
 
@@ -733,7 +739,7 @@ document body."
 
           (string? mount-point)
           (create-or-find-root-node mount-point))]
-    (if-let [vroot (get-element-state root-node)]
+    (if-let [vroot (du/element-state root-node)]
       (do
         ;; (assert (.-root vroot) "Can only remount at a previous mount point")
         (do-unmount! vroot)
@@ -752,7 +758,7 @@ document body."
                       root-node
                       nil
                       (bind-attrs! root-node {}))]
-          (set! (.-freactive-state root-node) vroot)
+          (du/set-element-state! root-node vroot)
           (configure-root! vroot vdom))))
     root-node))
 
@@ -764,7 +770,7 @@ document body."
 
           (string? mount-point)
           (find-by-id mount-point))
-        vroot (get-element-state root-node)]
+        vroot (du/element-state root-node)]
     ;; (assert (and root-node vroot (.-root vroot)) "Can't find mount point")
     (do-unmount! vroot)
     root-node))
